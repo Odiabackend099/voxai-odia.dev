@@ -1,101 +1,113 @@
-import Image from "next/image";
+﻿"use client";
+
+import { useState } from "react";
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [name, setName] = useState("My ODIA key");
+  const [limit, setLimit] = useState<number>(120);
+  const [minted, setMinted] = useState<{id?: string; api_key?: string; last4?: string} | null>(null);
+  const [text, setText] = useState("Hello Nigeria! This is ODIA Voice AI.");
+  const [voice, setVoice] = useState("female");
+  const [status, setStatus] = useState<string | null>(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+  async function createKey() {
+    setStatus("Creating key");
+    setMinted(null);
+    const res = await fetch("/api/keys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, rate_limit: limit })
+    });
+    const data = await res.json();
+    if (!res.ok) { setStatus(`Error: ${data?.error ?? "unknown"}`); return; }
+    // data may be an object or a single-row array depending on PostgRPC
+    const row = Array.isArray(data) ? data[0] : data;
+    setMinted(row);
+    setStatus("Key created. Copy it nowwill only be shown once.");
+  }
+
+  async function testTTS() {
+    if (!minted?.api_key) { setStatus("Create a key first."); return; }
+    setStatus("Calling gateway");
+    try {
+      const res = await fetch(process.env.NEXT_PUBLIC_GATEWAY_URL!, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": minted.api_key
+        },
+        body: JSON.stringify({ text, voice })  // your gateway forwards this
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        setStatus(`Gateway error (${res.status}): ${msg}`);
+        return;
+      }
+      // assume audio/mpeg returned
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play();
+      setStatus(" Played response audio.");
+    } catch (e:any) {
+      setStatus(`Request failed: ${e?.message ?? e}`);
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-white text-[#0F1222]">
+      <div className="mx-auto max-w-3xl px-6 py-12">
+        <h1 className="text-3xl font-semibold text-[#4A4AC1]">ODIA Voice AI</h1>
+        <p className="mt-1 opacity-75">Mint an API key and test Text-to-Speech through the Supabase gateway.</p>
+
+        <section className="mt-8 rounded-2xl border border-[#D9DDF5] p-6">
+          <h2 className="text-lg font-medium mb-3">1) Create API key</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">Key Name
+              <input value={name} onChange={e=>setName(e.target.value)}
+                     className="mt-1 w-full rounded-lg border px-3 py-2" />
+            </label>
+            <label className="text-sm">Rate limit (req/min)
+              <input type="number" value={limit} onChange={e=>setLimit(parseInt(e.target.value||"0"))}
+                     className="mt-1 w-full rounded-lg border px-3 py-2" />
+            </label>
+          </div>
+          <button onClick={createKey}
+                  className="mt-4 rounded-xl bg-[#5B5BD6] px-4 py-2 text-white hover:bg-[#4A4AC1]">
+            Create key
+          </button>
+
+          {minted?.api_key && (
+            <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <div className="text-sm font-medium">Save this key now (shown once):</div>
+              <code className="mt-1 block break-all text-sm">{minted.api_key}</code>
+            </div>
+          )}
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-[#D9DDF5] p-6">
+          <h2 className="text-lg font-medium mb-3">2) Test TTS</h2>
+          <label className="text-sm block">Text
+            <textarea value={text} onChange={e=>setText(e.target.value)}
+                      rows={3} className="mt-1 w-full rounded-lg border px-3 py-2" />
+          </label>
+          <div className="mt-3">
+            <label className="text-sm">Voice
+              <select value={voice} onChange={e=>setVoice(e.target.value)}
+                      className="mt-1 w-full rounded-lg border px-3 py-2">
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+              </select>
+            </label>
+          </div>
+          <button onClick={testTTS}
+                  className="mt-4 rounded-xl bg-[#00B3A4] px-4 py-2 text-white hover:opacity-90">
+            Play test
+          </button>
+        </section>
+
+        {status && <p className="mt-6 text-sm opacity-80">Status: {status}</p>}
+      </div>
+    </main>
   );
 }
